@@ -1,5 +1,5 @@
 
-## Ejercicio 1 - b
+## Ejercicio 1 
 
 Suponga que existe un antivirus distribuido que se compone de R procesos robots Examinadores y 1 proceso Analizador. Los procesos Examinadores están buscando continuamente posibles sitios web infectados; cada vez que encuentran uno avisan la dirección y luego continúan buscando. El proceso Analizador se encarga de hacer todas las pruebas necesarias con cada uno de los sitios encontrados por los robots para determinar si están o no infectados. 
 
@@ -14,14 +14,13 @@ c) Modifique el inciso (b) para que el Analizador resuelva los pedidos en el ord
 // Usaria R procesos RobotExaminador, un proceso Analizador y un proceso Administrador el cual sea el intermediario
 
 //Recursos : 
-// Lo recursos que utilizaria seria una cola en el adminisytador para acumular los posibles sitios afectados y que el analizador los vaya pidiendo.
+// Lo recursos que utilizaria seria una cola en el administrador para acumular los posibles sitios afectados y que el analizador los vaya pidiendo.
 
 //Comunicaciones : 
 //Las comunicacioens necesarias son los canales implicitos que hay por cada par de procesos
 
 ```
 
-> Pregunta : Acá va con coordinador ? ya que si no le pongo el coordinador el proceso de robot examinador se quedara esperando a que el analizador reciba su mensaje y no podrá seguir su ejecución. O va sin coordinador ? 
 ```c
 //B
 
@@ -29,32 +28,29 @@ process RobotExaminador[id: 0..R-1]{
 	txt sitio;
 	while (True){
 		BuscarSitioAfectado(sitio);
-		Admin!posibleAfectado(sitio);
+		Analixador!posibleAfectado(sitio);
 	}
 }
 
 process Analizador{
 	txt sitio; 
 	while (True){
-		Admin!pedido(); //Avisa que quiere un nuevo sitio
-		Admin?analizar(sitio); //Espera la respuesta con el sitio
+		RobotExaminador?posibleAfectado(sitio); 
 		analizarSitio(sitio);
-		//Realiza acción .......
+		//Realiza acción ..
 	}
 }
 
-process Admin{
-	cola buffer; txt sitio; 
-	while (True){
-		do RobotExaminador[*]?posibleAfectado(sitio) -> push(buffer,sitio); //Pusheo en la cola el proximo sitio a examinar
-		
-		[] not isEmpty(buffer); Analizador?pedido() -> Analizador!analizar(pop(buffer)); //Le envia el sig sitio a analizar
-	}
-}
+
 
 ```
 
+> Acá usamos el coordinador para poder mantener un orden de los pedidos. 
+> Ya que es la única forma donde nos aseguramos el orden "De llegada". 
 ```c
+
+// C 
+
 process RobotExaminador[id: 0..R-1]{
 	txt sitio;
 	while (True){
@@ -87,7 +83,6 @@ process Admin{
 
 En un laboratorio de genética veterinaria hay 3 empleados. El primero de ellos continuamente prepara las muestras de ADN; cada vez que termina, se la envía al segundo empleado y vuelve a su trabajo. El segundo empleado toma cada muestra de ADN preparada, arma el set de análisis que se deben realizar con ella y espera el resultado para archivarlo. Por último, el tercer empleado se encarga de realizar el análisis y devolverle el resultado al segundo empleado.
 
-> Consulta : Acá como el único que me dice que continua su trabajo es el empleado 1, por eso ponemos el admin ? en cambio el empleado 2 y 3 no me lo dice por lo que el admin no aplica para ellos ? 
 ```c
 
 process Empleado1{
@@ -123,11 +118,11 @@ process Admin{
 	cola buffer; 
 	txt muestra; 
 	do Empleado1?muestraNueva(muestra) -> buffer.push(muestra)
-	[] not isEmpty(buffer); Empleado2?muestraArmar() -> Empleado2!envioMuestra(buffer.pop); 
+	[] not isEmpty(buffer); Empleado2?muestraArmar() -> Empleado2!envioMuestra(buffer.pop); //No debe estar la cola vacia para poder recibir el pedido de una muestra
 }
 ```
 
-## Ejercicio 3 - byc
+## Ejercicio 3 
 
 En un examen final hay N alumnos y P profesores. Cada alumno resuelve su examen, lo entrega y espera a que alguno de los profesores lo corrija y le indique la nota. Los profesores corrigen los exámenes respetando el orden en que los alumnos van entregando.
 
@@ -137,6 +132,7 @@ c) Ídem b) pero considerando que los alumnos no comienzan a realizar su examen 
 
 Nota: maximizar la concurrencia; no generar demora innecesaria; todos los procesos deben terminar su ejecución
 
+> Acá usamos el admin para respetar el orden en que van llegando y entregando los examenes.
 ```c
 //A
 
@@ -159,13 +155,14 @@ process Profesor{
 
 process Admin{
 	cola buffer; txt examen; int id;  
-	do Alumno[*]!entregarExamen(examen, id) -> buffer.push(examen,id); 
+	do Alumno[*]!entregarExamen(examen, id) -> buffer.push(examen,id);
+	 
 	[] not isEmpty(buffer); Profesor?dameExamen() -> Profesor!examenACorregir(buffer.pop); 
 }
 
 ```
 
-> Acá tengo problemas en como controlar en el admin que corte y mande el corte a los profesores. 
+> Acá para cortar el proceso del profesor nos conviene mandar un -1 en el id del alumno ya que al ser P > 1, y pedirnos el corte no hay forma de que los profesores sepan cuando ya todos entregaron. 
 ```c
 //B
 
@@ -173,10 +170,10 @@ process Alumno[id: 0..N-1]{
 	int nota; txt examen;  
 	HacerExamen(examen); 
 	Admin!entregaExamen(examen,id); 
-	Profesor[*]?entregaNota(nota); 
+	Profesor[*]?entregaNota(nota); //Lo puedo recibir de cualquier profesor.
 }
 
-//Como debe cortar puede cortar cuando reciba un id no valido
+//Cortar cuando reciba un id no valido
 process Profesor[id:0..P-1]{
 	txt examen; int idA, nota;
 	Admin!dameExamen(id); 
@@ -193,17 +190,25 @@ process Admin{
 	int cant = 0; 
 	cola buffer; txt examen; int idA,idP;  
 	
-	do Alumno[*]!entregarExamen(examen, idA) -> buffer.push(examen,idA); 
-	[] not isEmpty(buffer); Profesor?dameExamen(idP) -> Profesor[idP]!examenACorregir(buffer.pop); 
+	do (cant < N); Alumno[*]?entregarExamen(examen, idA) -> buffer.push(examen,idA);  
+	
+	[] (cant < N); not isEmpty(buffer); Profesor?dameExamen(idP) -> Profesor[idP]!examenACorregir(buffer.pop), cant++;
+	
+	for i : 1..P{
+		Profesor[i]!examenACorregir(" ",-1);
+	} 
 }
 
 ```
 
 ```c
 //C
+
+// Lo que se debe cambiar del B es que debemos hacer un FOR de 1..N(Alumnos) para recibir que los alumnos van llegando y despues que ahí se los libere para hacer el examen...
+
 ```
 
-## Ejercicio 4 - c
+## Ejercicio 4 
 
 En una exposición aeronáutica hay un simulador de vuelo (que debe ser usado con exclusión mutua) y un empleado encargado de administrar su uso. Hay P personas que esperan a que el empleado lo deje acceder al simulador, lo usa por un rato y se retira. 
 
@@ -260,7 +265,6 @@ process Persona[id:0..P-1]{
 ```c
 //C
 
-//Preguntar : No menciona que los procesos deben terminar... lo termino al admin ??
 
 process Admin{
 	cola buffer; 
@@ -290,7 +294,7 @@ process Persona[id:0..P-1]{
 
 ```
 > Para respetar el orden de llegada es necesario el uso de un admin, el cual vaya encolando las personas y los dos procesos se comuniquen con el mismo. 
-## Ejercicio 5 - chequear
+## Ejercicio 5 
 
 En un estadio de fútbol hay una máquina expendedora de gaseosas que debe ser usada por E Espectadores de acuerdo con el orden de llegada. Cuando el espectador accede a la máquina en su turno usa la máquina y luego se retira para dejar al siguiente. 
 
@@ -305,26 +309,6 @@ process Espectador[id:0..E-1]{
 	Admin!termineUsarla(); // Aviso que termine de usar la maquina y me retiro 
 }
 
-
-// Este se me hace raro : 
-//opción 1
-
-process Admin{
-	cola buffer; 
-	bool libre = True; 
-	int usaron = 0; 
-	int idA, 
-		do usaron < E; libre == true; Espectador[*]?solicitarUso(idA) -> Espectador[idA]!pasa(); libre = False; 
-		
-		[] usaron < E; libre == False; Espectador[*]?solicitarUso(idA) -> buffer.push(idA); 
-		
-		[] usaron < E; isEmpty(buffer); Espectador[*]?termineUsarla() ->  libre = True; usaron++;
-		
-		[] usaron < E; not isEmpty(buffer); Espectador[*]?termineUsarla() -> Espectador[buffer.pop()]!pasa();  
-}
-
-//Sino :
-//Opción 2 
 process Admin{
 	cola buffer; 
 	bool libre = True; 
@@ -346,6 +330,5 @@ process Admin{
 			Espectador[buffer.pop()]!pasa();
 		}
 }
-
 
 ```
