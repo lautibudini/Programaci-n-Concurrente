@@ -7,6 +7,7 @@ a. Existe un único empleado, el cual atiende por orden de llegada.
 b. Ídem a) pero considerando que hay 2 empleados para atender, ¿Qué debe modificarse en la solución anterior? 
 c. Ídem b) pero considerando que, si no hay clientes para atender, los empleados realizan tareas administrativas durante 15 minutos. ¿Se puede resolver sin usar procesos adicionales? ¿Qué consecuencias implicaría?
 
+> Los canales funcionan como colas FIFO, los mensajes se encolan de manera ordenada. Por lo cual si nos piden orden de llegada no lo necesitamos a comparación de PMS. 
 ```c
 //A
 chan atencion(int)
@@ -25,6 +26,7 @@ int idA;
 
 ```
 
+> En este caso al ser más de un empleado no pasa nada ya que los empleados hacen el receive y en caso de haber algún mensaje lo agarran sino se quedan esperando a que llegue otro. 
 ```c
 //B
 chan atencion(int)
@@ -73,7 +75,7 @@ int idA,id;
 	}else{
 		receive atencion(id) //Recibo el id y lo seteo en la variable id 
 	}
-	send siguiente[idA](id)  //Envio al empleado quiere laburar la informaación cual sea el caso en el que estamos
+	send siguiente[idA](id)  //Envio al empleado la informaación cual sea el caso en el que estamos
 }
 
 
@@ -83,7 +85,6 @@ int idA,id;
 
 Se desea modelar el funcionamiento de un banco en el cual existen 5 cajas para realizar pagos. Existen P clientes que desean hacer un pago. Para esto, cada una selecciona la caja donde hay menos personas esperando; una vez seleccionada, espera a ser atendido. En cada caja, los clientes son atendidos por orden de llegada por los cajeros. Luego del pago, se les entrega un comprobante. Nota: maximizar la concurrencia.
 
-> La resta de la persona en caja (El cual lo hace el admin) se realiza recién cuando la persona termina de ser atendida ???
 
 ```c
 chan espera(int)
@@ -147,53 +148,6 @@ Se debe modelar el funcionamiento de una casa de comida rápida, en la cual trab
 - Repetidamente cada cocinero toma un pedido pendiente dejado por los vendedores, lo cocina y se lo entrega directamente al cliente correspondiente. 
 Nota: maximizar la concurrencia.
 
-> Esta solución esta mal : 
-```c
-chan RecibirPedido(txt, int)
-chan RecibirPedidoVendedor(txt, int)
-
-chan esperaComida[C](txt)
-chan pedidosACocinar(txt,int)
-
-process cocinero[id:0..1]{
-txt pedido; int idA; 
-txt comida;
-
-	while (True)
-		receive hayPedido(pedido,idA); //Espera que haya algun pedido que se lo manda algun vendedor
-		comida = Cocinar(pedido);     
-		send esperaComida[idA](comida) ; //Le envia la comida al cliente
-}
-
-process vendedor[id:0..2]{
-txt pedido; int idA; 
-	while (True){
-		if (isEmpty (RecibirPedidoVendedor)){
-			ReponerPack();
-		}else{
-			receive RecibirPedidoVendedor(pedido,idA); //Recibe el pedido de algun cliente
-			send hayPedido(pedido,idA); //Se los manda a los cocineros
-		}
-
-		
-	}
-}
-
-process cliente[id:0..C-1]{
-	txt pedido = GenerarPedido();      //Genera el pedido 
-	send RecibirPedido(pedido,id);     //avisar que hay pedido
-	receive esperaComida[id](comida);  //Espera que le entreguen su comida
-}
-
-process coordinador{
-txt pedido; int idA; 
-	while (True){
-		receive RecibirPedido(pedido,idA); //Recibe el pedido del cliente
-		send RecibirPedidoVendedor(pedido,idA);       //Se lo envia a los vendedores
-	}
-}
-
-```
 
 ```c
 chan RecibirPedido(txt, int)
@@ -249,7 +203,9 @@ txt pedido; int idA;
 	}
 }
 ```
-> Acá lo que hago es en lugar de mandar algo para avisar que no hay cliente, es mandar un signal y si esta vacío el canal donde se envían los pedidos es que debe reponer el vendedor. 
+> Acá lo que hago es en lugar de mandar algo para avisar que no hay cliente, es mandar un signal y si esta vacío el canal donde se envían los pedidos es que debe reponer el vendedor.
+
+
 ### Ejercicio 4
 
 Simular la atención en un locutorio con 10 cabinas telefónicas, el cual tiene un empleado que se encarga de atender a N clientes. Al llegar, cada cliente espera hasta que el empleado le indique a qué cabina ir, la usa y luego se dirige al empleado para pagarle. El empleado atiende a los clientes en el orden en que hacen los pedidos. A cada cliente se le entrega un ticket factura por la operación. 
@@ -264,7 +220,8 @@ Nota: maximizar la concurrencia; suponga que hay una función Cobrar() llamada p
 //A 
 //Acá hacemos uso del if no deterministico ya que no nos aclara si alguien tiene o no prioridad entonces puede ejecutarse cualquiera que sea verdadero. 
 
-queue cabinasLibres(1,2,3,4,5,6,7,8,9,10);
+//Con el aviso de acción lo que hago es evitar el bussy Waiting en este caso esta bien y porq son solo dos opciones, sino ya se complica. En otros casos lo mejor es a veces evitar esto y generar un poco de bussy Waiting
+
 chan avisoAccion();
 chan UsoDeMaquina(int);
 chan liberoMaquina(int, int);
@@ -273,15 +230,16 @@ chan UsaMaquina[N](int);
 
 process empelado{
 int numMaquina, idA, idB; txt comprobante; 
+queue cabinasLibres(1,2,3,4,5,6,7,8,9,10);
 	for i : 1 to N {
 		receive avisoAccion(); //Espera a que pase algo
 		if (not isEmpty(UsoDeMaquina)){ 
 			//Alguien quiere usar la maquina
 			receive UsoDeMaquina(idA); 
 			if (cabinasLibre.isEmpty()){
-				//No hay cabinas libres
-				//Espero a que alguien quiera pagar
+				
 				receive liberoMaquina(numMaquina, idB); 
+				receive avisoAccion(); //consumo el aviso acción
 				cabinasLibres.push(numMaquina); //Pushea la cabina como libre
 				comprobante = Cobrar(idA); //Le cobra
 				send ticket[idA](comprobante);//Le envia el comprobante al cliente
@@ -290,8 +248,7 @@ int numMaquina, idA, idB; txt comprobante;
 			cabinasLibres.pop(numMaquina); 
 			send usaMaquina[idA](numeroMaquina);
 		[] (not empty(liberoMaquina))
-		//}else{
-			//esperamos que alguien quiera pagar
+		
 			receive liberoMaquina(numMaquina, idA); 
 			cabinasLibres.push(numMaquina); //Pushea la cabina como libre
 			comprobante = Cobrar(idA); //Le cobra
@@ -315,40 +272,37 @@ int numeroMaquina; txt comprobante;
 ```
 
 ```c
-//B
+//B --NO DETERMINISTICO
 
 //Lo que debe hacerse acá es la misma logica que en el punto A pero debe reemplazarse el if no deterministico por un if-else comun, priorizando así el pago antes de el uso de cabinas
 
-queue cabinasLibres(1,2,3,4,5,6,7,8,9,10);
+
 chan avisoAccion();
 chan UsoDeMaquina(int);
 chan liberoMaquina(int, int);
 chan ticket[N](txt); 
 chan UsaMaquina[N](int); 
 
-process empelado{
+process empleado{
+queue cabinasLibres(1,2,3,4,5,6,7,8,9,10);
 int numMaquina, idA, idB; txt comprobante; 
+
 	for i : 1 to N {
-		receive avisoAccion(); //Espera a que pase algo
+		receive avisoAccion(); //NO va ya que lo pierdo.........
 		if (not isEmpty(liberoMaquina)){ 
 			receive liberoMaquina(numMaquina, idA); 
 			cabinasLibres.push(numMaquina); //Pushea la cabina como libre
 			comprobante = Cobrar(idA); //Le cobra
 			send ticket[idA](comprobante);//Le envia el comprobante al cliente
 			
-		} else {
+		}
+		[] ( (not isEmpty(UsoMaquina())  and (not cabinasLibres.isEmpty())  and 
+		isEmpty(liberoMaquina)){ // Al poner que este vacio liberoMaquina le estoy dando la prioridad q necesitamos
+		
 			receive UsoDeMaquina(idA); 
-			if (cabinasLibre.isEmpty()){
-				//No hay cabinas libres
-				//Espero a que alguien quiera pagar
-				receive liberoMaquina(numMaquina, idB); 
-				cabinasLibres.push(numMaquina); //Pushea la cabina como libre
-				comprobante = Cobrar(idA); //Le cobra
-				send ticket[idA](comprobante);//Le envia el comprobante al cliente
-			}
-			//Le asigna una cabina
 			cabinasLibres.pop(numMaquina); 
-			send usaMaquina[idA](numeroMaquina);
+			send usaMaquina[idA](numeroMaquina); //Le asigna una cabina
+		}
 		}
 	}
 
@@ -366,13 +320,16 @@ int numeroMaquina; txt comprobante;
 }
 ```
 
+> Nota : [] ( (not isEmpty(UsoMaquina())  and  (not cabinasLibres.isEmpty()) and 
+		isEmpty(liberoMaquina))
+	Se deben cumplir las tres para que tenga prioridad en un if no deterministico una acción especifica como lo es pagar!!!!!
 ### Ejercicio 5 
 
 Resolver la administración de 3 impresoras de una oficina. Las impresoras son usadas por N administrativos, los cuales están continuamente trabajando y cada tanto envían documentos a imprimir. Cada impresora, cuando está libre, toma un documento y lo imprime, de acuerdo con el orden de llegada. 
 
 a) Implemente una solución para el problema descrito. 
 b) Modifique la solución implementada para que considere la presencia de un director de oficina que también usa las impresas, el cual tiene prioridad sobre los administrativos. 
-c) Modifique la solución (a) considerando que cada administrativo imprime 10 trabajos y que todos los procesos deben terminar su ejecución. 
+c)  
 d) Modifique la solución (b) considerando que tanto el director como cada administrativo imprimen 10 trabajos y que todos los procesos deben terminar su ejecución. 
 e) Si la solución al ítem d) implica realizar Busy Waiting, modifíquela para evitarlo. 
 
@@ -381,17 +338,15 @@ Nota: ni los administrativos ni el director deben esperar a que se imprima el do
 ```c
 //A
 
-//Acá lo que hice fue que los empleados reciban lo que imprimieron. ???? 
 
 chan solicitudImpresion(int, txt); 
-chan resultado[N](txt); 
+
 
 process impresora[id:0..2]{
 int idAux; txt Domumento, impresion; 
 	while (True){
 		receive solicitudImpresion(idAux,documento); 
 		impresion = Imprimir(documento);
-		send resultado[idAux](documento); 
 	}
 }
 
@@ -401,14 +356,12 @@ txt documento, resultado;
 	while (True){
 		GenerarDocumento(documento);
 		send solicitudImpresion(id,documento); 
-		receive resultado[id](resultado); 
-		// Analiza el resultado
 	}
 }
 ```
 
 ```c
-//B
+//B //COORDINADOR
 
 //Acá lo que cambia es que se debe crear un nuevo canal para que pueda comunicarse solo con el director y saber cuando es el que manda la solicitud y tenerlo como prioridad. 
 //Como recibe de los dos lados debemos tener un canal para el signal así no queda en loop hasta que uno le mande
@@ -427,11 +380,9 @@ int idAux; txt Domumento, impresion;
 		if (not isEmpty(solicitudDirector)){
 			receive solicitudDirector(documento); 
 			impresion = Imprimir(documento);
-			send resultadoDirector(documento);
 		}else{
 			receive solicitudImpresion(idAux,documento); 
 			impresion = Imprimir(documento);
-			send resultado[idAux](documento); 
 		}
 	}
 }
@@ -462,13 +413,111 @@ txt documento, resultado;
 
 ```c
 //C
+//Acá debe usarse un coordinador ya que al no tener variables compartidas se debe manejar mediante un coordinador
+
+
+chan avisoImpresora(txt);
+chan Impresion(int,txt);
+chan UsoImpresora(int,txt);
+
+process impresora[id:0..2]{
+int idAux; txt Domumento, impresion, acción. 
+boolean seguir = True;  
+	while (seguir){
+		receive avisoImpresora(acción);
+		if (accion == "Corte"){
+			seguir = False; 
+		}else{
+			receive Impresion(idAux,documento); 
+			impresion = Imprimir(documento);
+		} 
+	}
+}
+
+
+process administrativo[id:0..N-1]{
+txt documento, resultado; 
+	for i: 1 to 10 {
+		GenerarDocumento(documento);
+		send UsoImpresora(id,documento); //Le envia al coordinador la solicitud de impresion
+	}
+}
+
+process coordinador{
+int idA, txt documento;
+	for i: 1 to (N*10)
+		receive UsoImpresora(idAux,documento); //Recibe la solicitud
+		send avisoImpresora("pedido"); //Le avisa que hay pedido
+		send Impresion(idAux,documento); //Se la manda a la impresora
+	for i: 1 to 3
+		send avisoImpresora("Corte"); //Les avisa que deben cortar 
+}
 
 ```
 
 ```c
 //D
+
+chan solicitudImpresion(int, txt); 
+chan solicitudDirector(txt);
+chan resultado[N](txt); 
+chan resultadoDirector(txt); 
+
+chan hayPedido(); 
+
+process impresora[id:0..2]{
+int idAux; txt Domumento, impresion, acción; 
+bool Seguir = True; 
+	while (Seguir){
+		receive hayPedido(acción); 
+		if (acción == "Corte"){
+			Seguir = False; 
+		}else{
+			if (not isEmpty(solicitudDirector)){
+			receive solicitudDirector(documento); 
+			impresion = Imprimir(documento);
+			send resultadoDirector(documento);
+		}else{
+			receive solicitudImpresion(idAux,documento); 
+			impresion = Imprimir(documento);
+			send resultado[idAux](documento); 
+		}
+		
+		}
+	}
+}
+
+
+process administrativo[id:0..N-1]{
+txt documento, resultado; 
+	while (True){
+		GenerarDocumento(documento);
+		send solicitudImpresion(id,documento); 
+		send hayPedido();
+		receive resultado[id](resultado); 
+		// Analiza el resultado
+	}
+}
+
+process director{
+txt documento, resultado; 
+	while (True){ 
+		GenerarDocumento(documento);
+		send solicitudDirector(documento); 
+		send hayPedido();
+		receive resultadoDirector(resultado); 
+		// Analiza el resultado
+	}
+}
+
+process coordinador{
+int idA, txt documento;
+	for i: 1 to (N*10)
+		receive UsoImpresora(idAux,documento); //Recibe la solicitud
+		send avisoImpresora("pedido"); //Le avisa que hay pedido
+		send Impresion(idAux,documento); //Se la manda a la impresora
+	for i: 1 to 3
+		send avisoImpresora("Corte"); //Les avisa que deben cortar 
+}
 ```
 
-```c
-//E
-```
